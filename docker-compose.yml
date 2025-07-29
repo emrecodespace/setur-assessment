@@ -1,0 +1,72 @@
+﻿services:
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_PASS: rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  contacts.api:
+    build:
+      context: .                         # Kök proje dizini
+      dockerfile: src/Contacts/Contacts.Api/Dockerfile
+    ports:
+      - "5001:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  contactreports.api:
+    build:
+      context: .                         # Kök proje dizini
+      dockerfile: src/Reports/ContactReports.Api/Dockerfile
+    ports:
+      - "5002:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  workerservice:
+    build:
+      context: .                         # Kök proje dizini
+      dockerfile: src/Workers/WorkerService/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      contacts.api:
+        condition: service_started
+      contactreports.api:
+        condition: service_started
+
+volumes:
+  db_data:
